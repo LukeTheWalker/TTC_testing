@@ -1,0 +1,10 @@
+cuquantum
+cuquantum-python
+matplotlib
+numpy
+qiskit-aer-gpu
+ipykernel
+pylatexenc
+matplotlib
+qiskit[visualization]
+qiskit-qasm3-import
