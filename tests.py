@@ -7,7 +7,7 @@ from qiskit.circuit.random import random_circuit
 from tqdm import tqdm
 import pandas as pd
 
-from interface import get_unitary_with_qiskit, contract_cppsim, replace_swap_with_unitary
+from interface import get_unitary_with_qiskit, contract_cppsim, replace_swap_with_unitary, unify_qubit_registers
 
 def pick_random_qubits(num_qubits, seed):
     # choose a random number of qubits from 1 to num_qubits
@@ -59,6 +59,8 @@ def circuit_contraction(qcs, sanity_check, output_file, filenames=['rcs']):
 
     for i, qc in enumerate(qcs):
         qc = replace_swap_with_unitary(qc)
+
+        qc = unify_qubit_registers(qc)
 
         # strip the circuit of any measurements
         qc = qc.copy()

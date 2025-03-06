@@ -2,7 +2,7 @@ import numpy as np
 import time
 import sys
 
-from qiskit import QuantumCircuit
+from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 from qiskit.circuit.random import random_circuit
 from qiskit.quantum_info import random_unitary
 from qiskit_aer import AerSimulator
@@ -189,3 +189,60 @@ def contract_cppsim(qc):
     execution_time_ms = (end_time - start_time) * 1000
 
     return unitary_matrix_cpp, execution_time_ms
+
+def unify_qubit_registers(original_qc):
+     # Count how many total qubits are in the original circuit
+    total_qubits = len(original_qc.qubits)
+
+    # Create a single quantum register for all qubits
+    new_qreg = QuantumRegister(total_qubits, 'q')
+
+    # Recreate classical registers (same names, same sizes)
+    new_cregs = []
+    for creg in original_qc.cregs:
+        cr = ClassicalRegister(creg.size, name=creg.name)
+        new_cregs.append(cr)
+
+    # Create the new circuit with one big Qreg + the original classical regs
+    new_qc = QuantumCircuit(new_qreg, *new_cregs, name=original_qc.name)
+
+    # Build a map from each old Qubit object -> new (qreg, index)
+    qubit_map = {}
+    for idx, qubit_obj in enumerate(original_qc.qubits):
+        qubit_map[qubit_obj] = idx  # qubit_obj -> integer index
+
+    # Build a map from each old Clbit object -> (the new ClassicalRegister, local_idx)
+    # We do this by iterating over the old circuit's classical registers in order,
+    # and hooking each clbit to the corresponding position in the new register.
+    cbit_map = {}
+    for creg in original_qc.cregs:
+        # Find the matching new creg we just created
+        new_creg = next(cr for cr in new_cregs if cr.name == creg.name and cr.size == creg.size)
+        for idx in range(creg.size):
+            # old cbit object: creg[idx]
+            old_cbit_obj = creg[idx]
+            cbit_map[old_cbit_obj] = (new_creg, idx)
+
+    # Reconstruct all instructions
+    for instr in original_qc.data:
+        # 'instr' is a circuit instruction object
+        operation = instr.operation
+        old_qubits = instr.qubits
+        old_cbits = instr.clbits
+
+        # Map the qubits to the new register
+        new_qargs = []
+        for q in old_qubits:
+            new_index = qubit_map[q]
+            new_qargs.append(new_qreg[new_index])
+
+        # Map the classical bits
+        new_cargs = []
+        for c in old_cbits:
+            (mapped_creg, mapped_idx) = cbit_map[c]
+            new_cargs.append(mapped_creg[mapped_idx])
+
+        # Add the same operation to the new circuit
+        new_qc.append(operation, new_qargs, new_cargs)
+
+    return new_qc
