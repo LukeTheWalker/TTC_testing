@@ -151,18 +151,27 @@ def parse_args():
 
 if __name__ == '__main__':
     args = parse_args()
-    # Update circuit_contraction to use args instead of sys.argv
-    if args.test == 'rcs':
-        qcs = [generate_random_qiskit_circuit(args.n_qubits, args.depth, 0)]
-    elif args.test == 'rcs_unitary':
-        qcs = [generate_random_unitary_circuit(args.n_qubits, args.depth, 0)]
-    elif args.test == 'literature':
-        qcs = []
-        filenames = []
+    qcs = []
+    filenames = []
+    if args.test == 'literature': 
         for filename in sorted(os.listdir(args.folder)):
             if filename.endswith('.qasm'):
                 qcs.append(QuantumCircuit.from_qasm_file(os.path.join(args.folder, filename)))
                 filenames.append(filename)
+    else:
+        # Add tqdm progress bar for circuit generation
+        for n in tqdm(
+            range(1, args.n_qubits + 1, 1),
+            desc="Generating circuits for testing",
+            unit="qubit"
+        ):
+            for d in range(100, args.depth + 50, 50):
+                if args.test == 'rcs':
+                    qcs.append(generate_random_qiskit_circuit(n, d, 0))
+                    filenames.append(args.test)
+                if args.test == 'rcs_unitary':
+                    qcs.append(generate_random_unitary_circuit(n, d, 0))
+                    filenames.append(args.test)
 
     output_file = f'{args.test}_{"sanity" if args.sanity else "full"}.csv'
     circuit_contraction(qcs, args.sanity, output_file, filenames)
