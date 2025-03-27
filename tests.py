@@ -4,6 +4,7 @@ import numpy as np
 from qiskit.quantum_info import random_unitary
 from qiskit import QuantumCircuit
 from qiskit.circuit.random import random_circuit
+from qiskit.compiler import transpile
 from tqdm import tqdm
 import pandas as pd
 
@@ -31,9 +32,9 @@ def generate_random_qiskit_circuit(num_qubits, depth, seed):
 
     np.random.seed(seed)
 
-    circuit = random_circuit(num_qubits, depth=depth, seed=seed, max_operands=4)
+    circuit = random_circuit(num_qubits, depth, max_operands=4)
 
-    # circuit = replace_swap_with_unitary(circuit)
+    circuit.data = circuit.data[:depth]
     
     return circuit
 
@@ -49,13 +50,12 @@ def generate_random_unitary_circuit(num_qubits, depth, seed):
         # qubits_chosen = list(range(num_qubits))
         # num_qubits_chosen = num_qubits
         circuit.unitary(create_random_unitary(num_qubits_chosen, seed), qubits_chosen)
-
     return circuit
 
 
 def circuit_contraction(qcs, sanity_check, output_file, filenames=['rcs']):
     # create df with additional columns for filename and standard deviations
-    df = pd.DataFrame(columns=['filename', 'num_qubits', 'depth', 'qiskit_time', 'qiskit_std', 'cpp_time', 'cpp_std', 'error'], dtype=float)
+    df = pd.DataFrame(columns=['filename', 'num_qubits', 'num_gates', 'qiskit_time', 'qiskit_std', 'cpp_time', 'cpp_std', 'error'], dtype=float)
 
     for i, qc in enumerate(qcs):
         qc = replace_swap_with_unitary(qc)
@@ -66,15 +66,19 @@ def circuit_contraction(qcs, sanity_check, output_file, filenames=['rcs']):
         qc = qc.copy()
         qc.remove_final_measurements()
 
+        num_ops = sum(qc.count_ops().values())
+
         if qc.num_qubits > 10:
-            print(f"Skipping circuit with {qc.num_qubits} qubits and {qc.depth()} depth from {filenames[i]}")
+            print(f"Skipping circuit with {qc.num_qubits} qubits and {num_ops} gates from {filenames[i]}")
             continue
 
         # Run each method 10 times and calculate averages
         qiskit_times = []
         cpp_times = []
 
-        print(f"Running circuit with {qc.num_qubits} qubits and {qc.depth()} depth from {filenames[i]}")
+        print(f"Running circuit with {qc.num_qubits} qubits and {num_ops} gates from {filenames[i]}")
+
+        # print(f"Running circuit with {qc.num_qubits} qubits and {qc.count_ops().values()} depth from {filenames[i]}")
 
         n_samples = 1 if sanity_check else 10
         
@@ -116,7 +120,7 @@ def circuit_contraction(qcs, sanity_check, output_file, filenames=['rcs']):
         new_row = {
             'filename': filenames[i],
             'num_qubits': qc.num_qubits,
-            'depth': qc.depth(),
+            'num_gates': num_ops,
             'qiskit_time': execution_time_ms_qiskit,
             'qiskit_std': qiskit_std,
             'cpp_time': execution_time_ms_cpp,
@@ -173,5 +177,5 @@ if __name__ == '__main__':
                     qcs.append(generate_random_unitary_circuit(n, d, 0))
                     filenames.append(args.test)
 
-    output_file = f'{args.test}_{"sanity" if args.sanity else "full"}.csv'
+    output_file = f'nvidia_results/{args.test}_{"sanity" if args.sanity else "full"}.csv'
     circuit_contraction(qcs, args.sanity, output_file, filenames)
